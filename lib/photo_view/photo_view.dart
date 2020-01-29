@@ -245,6 +245,7 @@ class PhotoView extends StatefulWidget {
     this.onPanEnd,
     this.onPanStart,
     this.onPanUpdate,
+    this.focusNode,
   })  : child = null,
         childSize = null,
         super(key: key);
@@ -278,6 +279,7 @@ class PhotoView extends StatefulWidget {
     this.onPanEnd,
     this.onPanStart,
     this.onPanUpdate,
+    this.focusNode,
   })  : loadingChild = null,
         imageProvider = null,
         gaplessPlayback = false,
@@ -359,9 +361,10 @@ class PhotoView extends StatefulWidget {
 
   final bool enabled;
 
-    final GestureDragStartCallback onPanStart;
+  final GestureDragStartCallback onPanStart;
   final GestureDragUpdateCallback onPanUpdate;
   final GestureDragEndCallback onPanEnd;
+  final FocusNode focusNode;
 
   @override
   State<StatefulWidget> createState() {
@@ -582,6 +585,7 @@ class _PhotoViewState extends State<PhotoView> {
       onPanStart: widget.onPanStart,
       onPanUpdate: widget.onPanUpdate,
       enableDoubleTap: widget.enableDoubleTap,
+      focusNode: widget.focusNode,
     );
   }
 

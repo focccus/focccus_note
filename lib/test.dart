@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:focccus_note/photo_view/photo_view.dart';
+import 'package:focccus_note/presenter/home.dart';
+import 'package:focccus_note/presenter/presenter.dart';
 import 'package:focccus_note/widgets/pen_input.dart';
 
 class TransformationsDemo extends StatefulWidget {
@@ -18,20 +20,31 @@ class _TransformationsDemoState extends State<TransformationsDemo> {
   FocusNode f = FocusNode();
 
   @override
+  void initState() {
+    super.initState();
+  }
+
+  @override
   Widget build(BuildContext context) {
     //c.updateMultiple(position: Offset(0,0));
 
     double width = MediaQuery.of(context).size.width;
+    FocusScope.of(context).requestFocus(f);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('2D Tranformations'),
         actions: <Widget>[
           IconButton(
+            icon: Icon(Icons.personal_video),
+            onPressed: () => Navigator.push(
+                context, MaterialPageRoute(builder: (c) => HomePage())),
+          ),
+          IconButton(
             icon: Icon(Icons.swap_calls,
                 color: translate ? Colors.red : Colors.white),
             onPressed: () => setState(() => translate = !translate),
-          )
+          ),
         ],
       ),
       body: Stack(
@@ -49,6 +62,7 @@ class _TransformationsDemoState extends State<TransformationsDemo> {
             //enableRotation: true,
             enableDoubleTap: true,
             minScale: 0.2,
+
             maxScale: 10.0,
 
             child: Stack(

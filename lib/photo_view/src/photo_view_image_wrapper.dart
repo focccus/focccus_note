@@ -36,6 +36,7 @@ class PhotoViewImageWrapper extends StatefulWidget {
     this.onPanUpdate,
     this.enabled = true,
     this.enableDoubleTap,
+    this.focusNode,
     @required this.controller,
     @required this.scaleBoundaries,
     @required this.scaleStateCycle,
@@ -57,6 +58,7 @@ class PhotoViewImageWrapper extends StatefulWidget {
     this.onPanUpdate,
     this.enabled = true,
     this.enableDoubleTap,
+    this.focusNode,
     @required this.controller,
     @required this.scaleBoundaries,
     @required this.scaleStateCycle,
@@ -88,6 +90,7 @@ class PhotoViewImageWrapper extends StatefulWidget {
 
   final bool enabled;
   final bool enableDoubleTap;
+  final FocusNode focusNode;
 
   @override
   State<StatefulWidget> createState() {
@@ -111,6 +114,8 @@ class _PhotoViewImageWrapperState extends State<PhotoViewImageWrapper>
   AnimationController _rotationAnimationController;
   Animation<double> _rotationAnimation;
 
+  bool ctrlDown = false;
+
   PhotoViewHeroAttributes get heroAttributes => widget.heroAttributes;
 
   void handleScaleAnimation() {
@@ -126,7 +131,7 @@ class _PhotoViewImageWrapperState extends State<PhotoViewImageWrapper>
   }
 
   void onScaleStart(ScaleStartDetails details) {
-    if (widget.onPanStart != null) {
+    if (widget.onPanStart != null && !ctrlDown) {
       widget.onPanStart(DragStartDetails(
         globalPosition: applyMatrix(details.focalPoint),
         localPosition: applyMatrix(details.localFocalPoint),
@@ -165,7 +170,7 @@ class _PhotoViewImageWrapperState extends State<PhotoViewImageWrapper>
   }
 
   void onScaleUpdate(ScaleUpdateDetails details) {
-    if (details.scale == 1.0 && widget.onPanUpdate != null) {
+    if (details.scale == 1.0 && widget.onPanUpdate != null && !ctrlDown) {
       final Offset current = applyMatrix(details.localFocalPoint);
       widget.onPanUpdate(DragUpdateDetails(
         globalPosition: applyMatrix(details.focalPoint),
@@ -192,12 +197,35 @@ class _PhotoViewImageWrapperState extends State<PhotoViewImageWrapper>
   void onScaleEnd(ScaleEndDetails details) {
     final double _scale = scale;
     final Offset _position = controller.position;
-    final double maxScale = scaleBoundaries.maxScale;
-    final double minScale = scaleBoundaries.minScale;
 
-    if (widget.onPanEnd != null) {
+    if (widget.onPanEnd != null && !ctrlDown) {
       widget.onPanEnd(DragEndDetails());
     }
+
+    checkScale();
+
+    // get magnitude from gesture velocity
+    final double magnitude = details.velocity.pixelsPerSecond.distance;
+
+    // animate velocity only if there is no scale change and a significant magnitude
+    if (_scaleBefore / _scale == 1.0 &&
+        widget.onPanUpdate == null &&
+        magnitude >= 400.0) {
+      final Offset direction = details.velocity.pixelsPerSecond / magnitude;
+      animatePosition(
+        _position,
+        clampPosition(_position + direction * 350.0),
+      );
+    }
+
+    checkAndSetToInitialScaleState();
+  }
+
+  void checkScale() {
+    final double _scale = scale;
+    final Offset _position = controller.position;
+    final double maxScale = scaleBoundaries.maxScale;
+    final double minScale = scaleBoundaries.minScale;
 
     //animate back to maxScale if gesture exceeded the maxScale specified
     if (_scale > maxScale) {
@@ -224,21 +252,6 @@ class _PhotoViewImageWrapperState extends State<PhotoViewImageWrapper>
       );
       return;
     }
-    // get magnitude from gesture velocity
-    final double magnitude = details.velocity.pixelsPerSecond.distance;
-
-    // animate velocity only if there is no scale change and a significant magnitude
-    if (_scaleBefore / _scale == 1.0 &&
-        widget.onPanUpdate == null &&
-        magnitude >= 400.0) {
-      final Offset direction = details.velocity.pixelsPerSecond / magnitude;
-      animatePosition(
-        _position,
-        clampPosition(_position + direction * 350.0),
-      );
-    }
-
-    checkAndSetToInitialScaleState();
   }
 
   void animateScale(double from, double to) {
@@ -370,31 +383,70 @@ class _PhotoViewImageWrapperState extends State<PhotoViewImageWrapper>
 
             if (widget.enabled == null || !widget.enabled) return child;
 
-            return Listener(
-              onPointerSignal: (e) {
-                if (e is PointerScrollEvent) {
-                  var scale =
-                      (controller.scale ?? 0.5) + e.scrollDelta.dy / -1000;
+            //FocusScope.of(context).autofocus(f);
+            //FocusScope.of(context).requestFocus(f);
 
-                  updateMultiple(
-                    scale: scale,
-                  );
+            return RawKeyboardListener(
+              focusNode: widget.focusNode ?? FocusNode(),
+              autofocus: true,
+              onKey: (k) {
+                if (k.runtimeType.toString() == 'RawKeyDownEvent') {
+                  if (k.logicalKey.keyLabel == "+") {
+                    var scale = (controller.scale ?? 0.5) + 0.1;
 
-                  // animateScale(controller.scale,
-                  //     controller.scale + e.scrollDelta.dy / -1000);
-                  // _scaleBefore += e.scrollDelta.dy / -1000;
+                    updateMultiple(
+                      scale: scale,
+                    );
+                    checkScale();
+                  }
+                  if (k.logicalKey.keyLabel == "-") {
+                    var scale = (controller.scale ?? 0.5) - 0.1;
+
+                    updateMultiple(
+                      scale: scale,
+                    );
+                    checkScale();
+                  }
+                }
+
+                if (ctrlDown && !k.isControlPressed) {
+                  setState(() {
+                    ctrlDown = false;
+                  });
+                } else {
+                  setState(() {
+                    ctrlDown = true;
+                  });
                 }
               },
-              child: GestureDetector(
-                child: child,
-                onDoubleTap: widget.enableDoubleTap ? nextScaleState : null,
-                onScaleStart: onScaleStart,
-                onScaleUpdate: onScaleUpdate,
-                onScaleEnd: onScaleEnd,
-                // Return null to prevent overriding tap handlers higher in the widget tree.
-                // See https://github.com/renancaraujo/photo_view/issues/134
-                onTapUp: widget.onTapUp == null ? null : onTapUp,
-                onTapDown: widget.onTapDown == null ? null : onTapDown,
+              child: Listener(
+                onPointerSignal: (e) {
+                  if (e is PointerScrollEvent) {
+                    var scale =
+                        (controller.scale ?? 0.5) + e.scrollDelta.dy / -1000;
+
+                    updateMultiple(
+                      scale: scale,
+                    );
+
+                    checkScale();
+
+                    // animateScale(controller.scale,
+                    //     controller.scale + e.scrollDelta.dy / -1000);
+                    // _scaleBefore += e.scrollDelta.dy / -1000;
+                  }
+                },
+                child: GestureDetector(
+                  child: child,
+                  onDoubleTap: widget.enableDoubleTap ? nextScaleState : null,
+                  onScaleStart: onScaleStart,
+                  onScaleUpdate: onScaleUpdate,
+                  onScaleEnd: onScaleEnd,
+                  // Return null to prevent overriding tap handlers higher in the widget tree.
+                  // See https://github.com/renancaraujo/photo_view/issues/134
+                  onTapUp: widget.onTapUp == null ? null : onTapUp,
+                  onTapDown: widget.onTapDown == null ? null : onTapDown,
+                ),
               ),
             );
           } else {

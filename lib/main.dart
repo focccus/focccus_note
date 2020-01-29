@@ -1,7 +1,15 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:focccus_note/presenter/home.dart';
 import 'package:focccus_note/test.dart';
 
-void main() => runApp(MyApp());
+void main() {
+  debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
+
+  runApp(MyApp());
+  SystemChrome.setEnabledSystemUIOverlays([]);
+}
 
 class MyApp extends StatelessWidget {
   // This widget is the root of your application.
@@ -10,18 +18,30 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Flutter Demo',
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // Try running your application with "flutter run". You'll see the
-        // application has a blue toolbar. Then, without quitting the app, try
-        // changing the primarySwatch below to Colors.green and then invoke
-        // "hot reload" (press "r" in the console where you ran "flutter run",
-        // or simply save your changes to "hot reload" in a Flutter IDE).
-        // Notice that the counter didn't reset back to zero; the application
-        // is not restarted.
-        primarySwatch: Colors.blue,
-      ),
-      home: TransformationsDemo(),
+          fontFamily: 'Roboto',
+          backgroundColor: Colors.white,
+          primarySwatch: MaterialColor(
+            Colors.black.value,
+            {
+              50: Colors.white,
+              100: Colors.white,
+              200: Colors.grey,
+              300: Colors.grey[700],
+              400: Colors.grey[900],
+              500: Colors.black,
+              600: Colors.black,
+              700: Colors.black,
+              800: Colors.black,
+              900: Colors.black,
+            },
+          ),
+          inputDecorationTheme: InputDecorationTheme(
+            focusColor: Colors.black,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(2),
+            ),
+          )),
+      home: HomePage(), //TransformationsDemo(),
     );
   }
 }
