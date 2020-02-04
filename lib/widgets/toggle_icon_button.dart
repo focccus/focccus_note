@@ -8,6 +8,7 @@ class ToggleIconButton extends StatelessWidget {
   final IconData activeIcon;
   final void Function() onPressed;
   final double size;
+  final VisualDensity density;
 
   ToggleIconButton(
     this.value, {
@@ -16,7 +17,8 @@ class ToggleIconButton extends StatelessWidget {
     this.activeColor = Colors.white,
     this.activeIcon,
     this.color,
-    this.size = 24,
+    this.size = 20,
+    this.density,
   });
 
   _getCurrentColor() {
@@ -26,6 +28,10 @@ class ToggleIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    var d = density ?? MediaQuery.of(context).size.width < 600
+        ? VisualDensity.compact
+        : VisualDensity.standard;
+
     return Padding(
       padding: const EdgeInsets.all(3.0),
       child: Container(
@@ -35,6 +41,7 @@ class ToggleIconButton extends StatelessWidget {
         ),
         child: IconButton(
           iconSize: size,
+          visualDensity: d,
           focusColor: activeColor,
           disabledColor: Colors.grey,
           icon: Icon(activeIcon != null && value ? activeIcon : icon),

@@ -1,10 +1,15 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import 'package:focccus_note/presenter/presenter.dart';
 import 'package:focccus_note/presenter/widgets/project_list_item.dart';
-import 'package:focccus_note/storage.dart';
-
+import 'package:focccus_note/storage/storage.dart';
+import 'package:focccus_note/widgets/text_dialog.dart';
 import 'data/project.dart';
+import 'package:focccus_note/storage/http.dart' as http;
 
 class HomePage extends StatefulWidget {
   @override
@@ -19,15 +24,65 @@ class _HomePageState extends State<HomePage> {
         context, MaterialPageRoute(builder: (c) => PresenterPage(p)));
   }
 
-  void _addPresentation() {
-    final prj = Project.init();
-    print(prj);
+  void _addPresentation([Project p]) {
+    final prj = p ?? Project.init();
     addPresentation(prj).then((value) {
       if (value) {
-        print(projects);
-        setState(() => projects.add(prj));
+        setState(() => projects.insert(0, prj));
       }
     });
+  }
+
+  void _pastePresentation(BuildContext context) async {
+    final d = await Clipboard.getData('text/plain');
+    if (d != null) {
+      try {
+        final m = json.decode(d.text) as Map<String, dynamic>;
+        final prj = Project.fromJson(m, null);
+        if (prj != null) {
+          _addPresentation(prj);
+        }
+      } catch (e) {
+        print(e);
+        Scaffold.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Sorry the pasted content was not in the right format. Please ensure that you copy a project.',
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  void _clonePresentation() async {
+    var url = await showDialog<String>(
+      context: context,
+      builder: (c) => TextDialog('Please enter a Gist id or Url below.', ''),
+    );
+
+    if (url != null) {
+      url = url.split('/').last;
+      final token = await getToken();
+      try {
+        final prj = await http.clonePresentation(url, token);
+        if (prj != null) {
+          _addPresentation(prj);
+        }
+      } catch (e) {
+        print(e);
+        final newToken = await showDialog<String>(
+          context: context,
+          builder: (c) => TextDialog(
+              'It seems an error occured. Please check your GitHub token:',
+              token),
+        );
+        if (newToken != null) {
+          await setToken(newToken);
+          _clonePresentation();
+        }
+      }
+    }
   }
 
   double calcPadding() {
@@ -39,6 +94,7 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       body: FutureBuilder<List<Project>>(
           future: getPresentations(),
           builder: (context, snapshot) {
@@ -61,8 +117,28 @@ class _HomePageState extends State<HomePage> {
                 child: CircularProgressIndicator(),
               );
           }),
-      floatingActionButton: FloatingActionButton(
-          child: Icon(Icons.add), onPressed: _addPresentation),
+      floatingActionButton: Builder(
+        builder: (context) => SpeedDial(
+          animatedIcon: AnimatedIcons.menu_close,
+          children: [
+            SpeedDialChild(
+              child: Icon(Icons.add),
+              onTap: _addPresentation,
+              label: 'Add',
+            ),
+            SpeedDialChild(
+              child: Icon(Icons.content_paste),
+              onTap: () => _pastePresentation(context),
+              label: 'Paste',
+            ),
+            SpeedDialChild(
+              child: Icon(Icons.system_update),
+              onTap: _clonePresentation,
+              label: 'Clone',
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

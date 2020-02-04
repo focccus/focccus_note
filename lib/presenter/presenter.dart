@@ -9,14 +9,16 @@ import 'package:focccus_note/presenter/shapes.dart';
 import 'package:focccus_note/presenter/viewer.dart';
 import 'package:focccus_note/presenter/widgets/modes_bar.dart';
 import 'package:focccus_note/presenter/widgets/top_bar.dart';
-import 'package:focccus_note/storage.dart';
-import 'package:focccus_note/widgets/background.dart';
+import 'package:focccus_note/storage/storage.dart';
+import 'package:focccus_note/presenter/widgets/background.dart';
 import 'package:focccus_note/widgets/change.dart';
 import 'package:undo/undo.dart';
 
 import 'frames.dart';
 
+const padding = 128.0;
 const CanvasSize = Size(1920, 1080);
+const CanvasPSize = Size(1920.0 + padding * 2, 1080.0 + padding * 2);
 
 class PresenterPage extends StatefulWidget {
   final Project prj;
@@ -42,7 +44,7 @@ class _PresenterPageState extends State<PresenterPage>
   Map<Toolmode, Color> colors = {Toolmode.marker: Colors.yellow.shade200};
   Map<Toolmode, double> strokeSizes = {
     Toolmode.marker: 10,
-    Toolmode.ereaser: 15
+    Toolmode.eraser: 15
   };
   bool showColor = true;
   bool showStroke = true;
@@ -62,16 +64,116 @@ class _PresenterPageState extends State<PresenterPage>
     );
   }
 
+  void shapeStart(Offset o) {
+    if (frames.isNotEmpty && currentFrame == frames.last) {
+      setState(() {
+        currentFrame = Keyframe.init();
+      });
+    }
+
+    o = (o - Offset(padding, padding)) / CanvasSize.width;
+
+    Shape n;
+    bool update = true;
+
+    switch (toolmode) {
+      case Toolmode.pen:
+        {
+          n = PenShape.init(getCurrentColor(), getCurrentStroke());
+          break;
+        }
+      case Toolmode.brush:
+        {
+          n = BezierShape.init(getCurrentColor(), getCurrentStroke(), 0.7);
+          break;
+        }
+      case Toolmode.eraser:
+        {
+          n = EraserPreviewShape.init(getCurrentStroke() * 2);
+          break;
+        }
+      case Toolmode.marker:
+        {
+          n = MarkerShape.init(getCurrentColor(), getCurrentStroke());
+          break;
+        }
+      case Toolmode.rect:
+        {
+          n = RectShape.init(o, getCurrentColor(), getCurrentStroke());
+          update = false;
+          break;
+        }
+      case Toolmode.line:
+        {
+          n = LineShape.init(o, getCurrentColor(), getCurrentStroke());
+          update = false;
+          break;
+        }
+      default:
+        {}
+    }
+    if (n != null) {
+      currentShape = n;
+      if (update) shapeUpdate(o);
+    }
+  }
+
+  void shapeUpdate(Offset o) {
+    if (o.dx > 1) {
+      o = (o - Offset(padding, padding)) / CanvasSize.width;
+    }
+
+    if (!(CanvasSize / CanvasSize.width).contains(o)) {
+      shapeEnd();
+      return;
+    }
+    bool updated = false;
+
+    if (currentShape is PenShape) {
+      final points = (currentShape as PenShape).points;
+      if (points.isEmpty || points.last.dx != o.dx || points.last.dy != o.dy) {
+        (currentShape as PenShape).addPoint(o);
+        updated = true;
+      }
+    }
+    if (currentShape is RectShape) {
+      (currentShape as RectShape).p2 = o;
+      updated = true;
+    }
+    if (currentShape is LineShape) {
+      (currentShape as LineShape).p2 = o;
+      updated = true;
+    }
+    if (currentShape is EraserPreviewShape) {
+      (currentShape as EraserPreviewShape).o = o;
+      updated = true;
+    }
+    if (updated) {
+      setState(() {});
+    }
+  }
+
   void shapeEnd() {
     if (currentShape != null) {
+      // prevent little dots when moving
+      if (currentShape.length < 4) {
+        setState(() {
+          currentShape = null;
+        });
+        return;
+      }
+
       if (currentShape is PenShape) {
         final c = (currentShape as PenShape);
         c.points = simplify(c.points);
+        c.calculate();
       }
       if (currentShape is BezierShape) {
         final c = (currentShape as PenShape);
         c.points = simplify(c.points, 0.005);
+        c.calculate();
       }
+
       setState(() {
         if (!currentShape.isEmpty) {
           changes.add(
@@ -86,87 +188,6 @@ class _PresenterPageState extends State<PresenterPage>
 
         currentShape = null;
       });
-    }
-  }
-
-  void shapeStart(Offset o) {
-    if (frames.isNotEmpty && currentFrame == frames.last) {
-      setState(() {
-        currentFrame = Keyframe.init();
-      });
-    }
-
-    o = o / CanvasSize.width;
-
-    Shape n;
-
-    switch (toolmode) {
-      case Toolmode.pen:
-        {
-          n = PenShape.init(getCurrentColor(), getCurrentStroke());
-          break;
-        }
-      case Toolmode.brush:
-        {
-          n = BezierShape.init(getCurrentColor(), getCurrentStroke(), 0.7);
-          break;
-        }
-      case Toolmode.ereaser:
-        {
-          n = PenShape.init(Colors.white, getCurrentStroke() * 2);
-          break;
-        }
-      case Toolmode.marker:
-        {
-          n = MarkerShape.init(getCurrentColor(), getCurrentStroke());
-          break;
-        }
-      case Toolmode.rect:
-        {
-          n = RectShape.init(o, getCurrentColor(), getCurrentStroke());
-          break;
-        }
-      case Toolmode.line:
-        {
-          n = LineShape.init(o, getCurrentColor(), getCurrentStroke());
-          break;
-        }
-      default:
-        {}
-    }
-    if (n != null) {
-      setState(() {
-        currentShape = n;
-      });
-    }
-  }
-
-  void shapeUpdate(Offset o) {
-    if (!CanvasSize.contains(o)) {
-      shapeEnd();
-      return;
-    }
-
-    o = o / CanvasSize.width;
-    bool updated = false;
-
-    if (currentShape is PenShape) {
-      final points = (currentShape as PenShape).points;
-      if (points.isEmpty || points.last.dx != o.dx || points.last.dy != o.dy) {
-        points.add(o);
-        updated = true;
-      }
-    }
-    if (currentShape is RectShape) {
-      (currentShape as RectShape).p2 = o;
-      updated = true;
-    }
-    if (currentShape is LineShape) {
-      (currentShape as LineShape).p2 = o;
-      updated = true;
-    }
-    if (updated) {
-      setState(() {});
     }
   }
 
@@ -199,7 +220,7 @@ class _PresenterPageState extends State<PresenterPage>
 
   Color getCurrentColor() {
     if (colors.containsKey(toolmode)) return colors[toolmode];
-    if (toolmode == Toolmode.ereaser || toolmode == Toolmode.pan) {
+    if (toolmode == Toolmode.eraser || toolmode == Toolmode.pan) {
       return null;
     }
     return Colors.black;
@@ -340,23 +361,25 @@ class _PresenterPageState extends State<PresenterPage>
               initialScale: 1.0,
               backgroundDecoration: BoxDecoration(color: Colors.grey),
 
-              child: SizedBox(
-                width: CanvasSize.width,
-                height: CanvasSize.height + 200,
-                child: Stack(
-                  children: <Widget>[
-                    //Container(color: Colors.white),
-                    RepaintBoundary(child: BackgroundPaint()),
-                    RepaintBoundary(
-                      child: PresentationPaint(
-                          getDisplayShapes(frames, currentFrame), CanvasSize),
-                    ),
-                    if (currentShape != null)
-                      PresentationPaint([currentShape], CanvasSize)
-                  ],
+              child: Center(
+                child: SizedBox(
+                  width: CanvasSize.width,
+                  height: CanvasSize.height,
+                  child: Stack(
+                    children: <Widget>[
+                      //Container(color: Colors.white),
+                      RepaintBoundary(child: BackgroundPaint()),
+                      RepaintBoundary(
+                        child: PresentationPaint(
+                            getDisplayShapes(frames, currentFrame), CanvasSize),
+                      ),
+                      if (currentShape != null)
+                        PresentationPaint([currentShape], CanvasSize)
+                    ],
+                  ),
                 ),
               ),
-              childSize: CanvasSize,
+              childSize: CanvasPSize,
             ),
             Positioned(
               right: 0,

@@ -104,6 +104,8 @@ class _SliderIconButtonState extends State<SliderIconButton> {
     }
   }
 
+  final size = 32.0;
+
   @override
   Widget build(BuildContext context) {
     return Stack(
@@ -115,8 +117,8 @@ class _SliderIconButtonState extends State<SliderIconButton> {
           //onLongPressMoveUpdate: (e) => onUpdate(e.localPosition),
           onTapUp: (e) => onEnd(),
           child: Container(
-            width: 54,
-            height: 54,
+            width: size,
+            height: size,
             decoration:
                 BoxDecoration(color: Colors.black, shape: BoxShape.circle),
             child: Center(

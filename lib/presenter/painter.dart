@@ -64,11 +64,20 @@ class _PresentationPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (length > 1) {
       final pShapes = List<Shape>.from(shapes);
-      pShapes.sort((s1, s2) {
-        return s2 is MarkerShape ? 1 : 0;
-      });
+      // pShapes.sort((s1, s2) {
+      //   return s2 is MarkerShape ? 1 : 0;
+      // });
+
+      for (var s in pShapes) {
+        if (s is MarkerShape) {
+          pShapes.remove(s);
+          pShapes.insert(0, s);
+        }
+      }
+
       pShapes.forEach(
-          (s) => s == null || s.isEmpty ? null : s.paint(canvas, size));
+        (s) => s == null || s.isEmpty ? null : s.paint(canvas, size),
+      );
     } else if (length == 1) {
       if (shapes.first != null && !shapes.first.isEmpty) {
         shapes.first.paint(canvas, size);

@@ -1,8 +1,6 @@
 import 'package:focccus_note/presenter/shapes.dart';
 import 'package:hive/hive.dart';
-import 'package:json_annotation/json_annotation.dart';
 
-@JsonSerializable()
 class Keyframe {
   List<Shape> shapes;
 
@@ -10,6 +8,7 @@ class Keyframe {
   Keyframe.init() : shapes = [];
 
   Keyframe animated(double d) {
+    if (d < 0) d = 0;
     var shown = shapes;
 
     if (shown.isNotEmpty) {

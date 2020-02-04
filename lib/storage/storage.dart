@@ -1,15 +1,24 @@
 // import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart';
 import 'package:focccus_note/presenter/data/project.dart';
 import 'package:hive/hive.dart';
-import 'package:hive_flutter/hive_flutter.dart';
+
+import 'path_html.dart'
+    if (dart.library.io) 'path_io.dart'
+    if (dart.library.html) 'path_html.dart';
 
 Box<Map> box;
+Box options;
 
-initStorage() async {
-  if (box != null) return box;
+void initStorage() async {
+  if (box != null) return;
   print("hiveINit");
-  await Hive.initFlutter();
+  if (!kIsWeb) {
+    await Hive.init(await getPath());
+  }
+
   box = await Hive.openBox<Map>('focccus_presentation');
+  options = await Hive.openBox('options');
 }
 
 clear() async {
@@ -17,8 +26,18 @@ clear() async {
   box.deleteAll(box.keys);
 }
 
+Future<String> getToken() async {
+  if (box == null) await initStorage();
+  return options.get('token');
+}
+
+Future<void> setToken(String token) async {
+  if (box == null) await initStorage();
+  return options.put('token', token);
+}
+
 Future<bool> addPresentation(Project prj) async {
-  await initStorage();
+  if (box == null) await initStorage();
   if (prj == null) return false;
   //print(drawings.last);
   box.add(prj.toJson());
@@ -42,6 +61,7 @@ Future<bool> addPresentation(Project prj) async {
 // }
 
 Future<void> savePresentation(Project prj) {
+  prj.modified = DateTime.now();
   return box.put(prj.key, prj.toJson());
 }
 
@@ -51,9 +71,13 @@ Future<void> deletePresentation(key) {
 }
 
 Future<List<Project>> getPresentations() async {
-  await initStorage();
-  return box.keys
+  if (box == null) {
+    await initStorage();
+  }
+  final res = box.keys
       .map(
           (k) => Project.fromJson(new Map<String, dynamic>.from(box.get(k)), k))
       .toList();
+  res.sort((a, b) => b.modified.compareTo(a.modified));
+  return res;
 }

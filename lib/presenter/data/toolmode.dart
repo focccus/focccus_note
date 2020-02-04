@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 IconData getToolIcon(Toolmode m) {
   switch (m) {
-    case Toolmode.ereaser:
+    case Toolmode.eraser:
       return Icons.delete_sweep;
     case Toolmode.pen:
       return Icons.gesture;
@@ -22,7 +22,7 @@ IconData getToolIcon(Toolmode m) {
 }
 
 enum Toolmode {
-  ereaser,
+  eraser,
   pen,
   brush,
   marker,

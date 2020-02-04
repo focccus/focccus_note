@@ -49,9 +49,11 @@ class FramesPage extends StatelessWidget {
                       ]
                     : null,
               ),
-              child: PresentationPaint(
-                getDisplayShapes(frames, frames[index]),
-                size,
+              child: RepaintBoundary(
+                child: PresentationPaint(
+                  getDisplayShapes(frames, frames[index]),
+                  size,
+                ),
               ),
             ),
           );

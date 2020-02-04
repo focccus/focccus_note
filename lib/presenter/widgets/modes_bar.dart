@@ -3,7 +3,7 @@ import 'package:focccus_note/presenter/data/toolmode.dart';
 import 'package:focccus_note/widgets/button_bar.dart';
 
 const modes = [
-  Toolmode.ereaser,
+  //Toolmode.eraser,
   Toolmode.pen,
   Toolmode.brush,
   Toolmode.marker,

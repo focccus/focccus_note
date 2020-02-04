@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 
 extension OffsetJson on Offset {
@@ -5,7 +7,7 @@ extension OffsetJson on Offset {
   static Offset fromJson(List<double> l) => Offset(l[0], l[1]);
 }
 
-List<Offset> _getPoints(List<double> json) {
+List<Offset> _getPoints(List<dynamic> json) {
   List<Offset> offsets = [];
   for (var i = 0; i < json.length - 1; i += 2) {
     offsets.add(Offset(json[i], json[i + 1]));
@@ -48,6 +50,7 @@ abstract class Shape {
   int get length;
 
   Map<String, dynamic> toJson();
+  bool collides(Offset o, double d);
 }
 
 class PageClearShape extends Shape {
@@ -62,20 +65,81 @@ class PageClearShape extends Shape {
   void paint(Canvas c, Size size) {}
 
   PageClearShape animated(double d) => this;
+  @override
+  bool collides(o, d) => false;
 
   Map<String, dynamic> toJson() => {'type': 'page_clear'};
+}
+
+class EraserPreviewShape extends Shape {
+  Offset o;
+  double width;
+
+  bool get isEmpty => o == null;
+  int get length => 0;
+
+  EraserPreviewShape();
+  EraserPreviewShape.init(this.width);
+
+  factory EraserPreviewShape.fromJson(json) => null;
+
+  @override
+  void paint(Canvas c, Size size) {
+    if (o != null) {
+      final p = Paint()..color = Colors.grey;
+
+      c.drawCircle(o * size.width, width / 2 * size.width, p);
+    }
+  }
+
+  EraserPreviewShape animated(double d) => this;
+  @override
+  bool collides(o, d) => false;
+
+  Map<String, dynamic> toJson() => {};
 }
 
 class PenShape extends Shape {
   List<Offset> points;
   Color color;
   double strokeWidth;
+  Path path;
 
-  PenShape(this.points, this.color, this.strokeWidth);
+  void addPoint(Offset o) {
+    if (o != null) points.add(o);
+    calculate();
+  }
+
+  void calculate() {
+    if (points.length > 1) {
+      path = Path()
+        ..fillType = PathFillType.nonZero
+        ..moveTo(points.first.dx, points.first.dy);
+      for (var i = 1; i < points.length; i++) {
+        path.lineTo(points[i].dx, points[i].dy);
+      }
+    }
+  }
+
+  bool collides(o, d) {
+    if (!path.getBounds().contains(o)) return false;
+    if (path.contains(o)) return true;
+
+    for (var p in points) {
+      if ((o - p).distanceSquared <= pow(d + strokeWidth, 2)) return true;
+    }
+
+    return false;
+  }
+
+  PenShape(this.points, this.color, this.strokeWidth) {
+    calculate();
+  }
+
   PenShape.init(this.color, this.strokeWidth) : points = [];
 
   factory PenShape.fromJson(json) => PenShape(
-        _getPoints(json['points'] as List<double>),
+        _getPoints(json['points']),
         Color(json['color']),
         json['stroke'],
       );
@@ -98,19 +162,19 @@ class PenShape extends Shape {
       ..strokeJoin = StrokeJoin.round
       ..strokeWidth = strokeWidth * size.width;
 
-    if (points.length > 1) {
-      Path path = Path()
-        ..fillType = PathFillType.nonZero
-        ..moveTo(points.first.dx * size.width, points.first.dy * size.width);
-      for (var i = 1; i < points.length; i++) {
-        path.lineTo(points[i].dx * size.width, points[i].dy * size.width);
-      }
+    if (path != null) {
+      var _path = path.transform(
+        Matrix4.diagonal3Values(size.width, size.width, size.width).storage,
+      );
 
-      c.drawPath(path, p);
+      c.drawPath(_path, p);
     } else if (points.length > 0) {
       c.drawCircle(points.first * size.width, strokeWidth / 2, p);
     }
   }
+
+  // @override
+  // bool collides(o, d) => ;
 
   @override
   Map<String, dynamic> toJson() => {
@@ -123,13 +187,14 @@ class PenShape extends Shape {
 
 class BezierShape extends PenShape {
   final double tension;
-  BezierShape(List<Offset> points, Color color, double strokeWidth,this.tension)
+  BezierShape(
+      List<Offset> points, Color color, double strokeWidth, this.tension)
       : super(points, color, strokeWidth);
   BezierShape.init(Color color, double strokeWidth, this.tension)
       : super([], color, strokeWidth);
 
   factory BezierShape.fromJson(json) => BezierShape(
-        _getPoints(json['points'] as List<double>),
+        _getPoints(json['points']),
         Color(json['color']),
         json['stroke'],
         json['tension'],
@@ -142,28 +207,18 @@ class BezierShape extends PenShape {
         tension,
       );
 
-  @override
-  void paint(Canvas c, size) {
-    final p = Paint()
-      ..color = color
-      ..strokeCap = StrokeCap.round
-      ..style = PaintingStyle.stroke
-      ..strokeJoin = StrokeJoin.round
-      ..strokeWidth = strokeWidth * size.width;
-
-    final spts = points.map((p) => p * size.width).toList();
-
-    final control_scale = tension / 0.5 * 0.175;
-
+  void calculate() {
     if (points.length > 1) {
-      Path path = Path()
+      final control_scale = tension / 0.5 * 0.175;
+
+      path = Path()
         ..fillType = PathFillType.nonZero
-        ..moveTo(spts.first.dx, spts.first.dy);
-      for (var i = 0; i < spts.length - 2; i++) {
-        final p1 = spts[i];
-        final p4 = spts[i + 1];
-        final p_before = i != 0 ? spts[i - 1] : p1;
-        final p_after = i < spts.length - 2 ? spts[i + 2] : p4;
+        ..moveTo(points.first.dx, points.first.dy);
+      for (var i = 0; i < points.length - 2; i++) {
+        final p1 = points[i];
+        final p4 = points[i + 1];
+        final p_before = i != 0 ? points[i - 1] : p1;
+        final p_after = i < points.length - 2 ? points[i + 2] : p4;
 
         var dp = p4 - p_before;
 
@@ -179,10 +234,24 @@ class BezierShape extends PenShape {
       if ((points.last - points.first).distance <= 0.002) {
         path.close();
       }
+    }
+  }
 
-      c.drawPath(path, p);
-    } else if (spts.isNotEmpty) {
-      c.drawCircle(spts.first, strokeWidth / 2, p);
+  @override
+  void paint(Canvas c, size) {
+    final p = Paint()
+      ..color = color
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke
+      ..strokeJoin = StrokeJoin.round
+      ..strokeWidth = strokeWidth * size.width;
+
+    if (path != null) {
+      final _path = path.transform(
+          Matrix4.diagonal3Values(size.width, size.width, size.width).storage);
+      c.drawPath(_path, p);
+    } else {
+      c.drawCircle(points.first, strokeWidth / 2, p);
     }
   }
 
@@ -190,6 +259,7 @@ class BezierShape extends PenShape {
   Map<String, dynamic> toJson() {
     final ret = super.toJson();
     ret['type'] = 'bezier';
+    ret['tension'] = tension;
     return ret;
   }
 }
@@ -210,6 +280,8 @@ class PointerShape extends Shape {
   PointerShape.init(this.color) : points = [];
 
   bool get isEmpty => points.isEmpty;
+
+  bool collides(o, d) => false;
 
   @override
   void paint(Canvas c, size) {
@@ -246,7 +318,7 @@ class MarkerShape extends PenShape {
       : super([], color, strokeWidth);
 
   factory MarkerShape.fromJson(json) => MarkerShape(
-        _getPoints(json['points'] as List<double>),
+        _getPoints(json['points']),
         Color(json['color']),
         json['stroke'],
       );
@@ -266,22 +338,15 @@ class MarkerShape extends PenShape {
       ..style = PaintingStyle.stroke
       ..strokeJoin = StrokeJoin.bevel
       ..strokeWidth = strokeWidth * 2 * size.width;
-    if (points.length > 1) {
-      Path path = Path()
-        ..moveTo(points.first.dx * size.width, points.first.dy * size.width);
-      for (var i = 1; i < points.length; i++) {
-        path.lineTo(points[i].dx * size.width, points[i].dy * size.width);
-      }
 
-      c.drawPath(path, p);
-    } else if (points.length > 0) {
-      final o = points.first;
-      p.strokeWidth = 2;
-      c.drawLine(
-        (o * size.width).translate(0, 2),
-        (o * size.width).translate(0, -2),
-        p,
+    if (path != null) {
+      var _path = path.transform(
+        Matrix4.diagonal3Values(size.width, size.width, size.width).storage,
       );
+
+      c.drawPath(_path, p);
+    } else if (points.length > 0) {
+      c.drawCircle(points.first * size.width, strokeWidth / 2, p);
     }
   }
 
@@ -318,6 +383,19 @@ class RectShape extends Shape {
         color,
         strokeWidth,
       );
+
+  bool collides(o, d) {
+    d = d + strokeWidth / 2;
+    final r = Rect.fromPoints(p1, p2);
+    final dc = (o - r.center);
+
+    if (dc.dx.abs() > (r.width / 2 + d)) return false;
+    if (dc.dy.abs() > (r.height / 2 + d)) return false;
+    if (dc.dx.abs() < (r.width / 2 - d)) return false;
+    if (dc.dy.abs() < (r.height / 2 - d)) return false;
+
+    return true;
+  }
 
   @override
   void paint(Canvas c, size) {
@@ -373,6 +451,20 @@ class LineShape extends Shape {
       ..strokeWidth = strokeWidth * size.width;
 
     c.drawLine(p1 * size.width, p2 * size.width, p);
+  }
+
+  bool collides(o, d) {
+    d = d + strokeWidth;
+
+    final d1 = (p1 - o).distance;
+    final d2 = (p2 - o).distance;
+
+    final lineLength = (p2 - p1).distance;
+
+    if (d1 + d2 >= lineLength - d && d1 + d2 <= lineLength + d) {
+      return true;
+    }
+    return false;
   }
 
   @override
