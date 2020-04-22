@@ -14,6 +14,8 @@ class TopActionBar extends StatelessWidget {
   final void Function() onPresent;
   final void Function() onAddFrame;
   final void Function() onBack;
+  final void Function() onProject;
+  final bool projectingActive;
 
   TopActionBar(
     this.color,
@@ -27,6 +29,8 @@ class TopActionBar extends StatelessWidget {
     this.onViewFrames,
     this.onPresent,
     this.onBack,
+    this.onProject,
+    this.projectingActive,
   });
 
   @override
@@ -76,6 +80,11 @@ class TopActionBar extends StatelessWidget {
               false,
               icon: Icons.play_arrow,
               onPressed: onPresent,
+            ),
+            ToggleIconButton(
+              projectingActive ?? false,
+              icon: Icons.cast,
+              onPressed: onProject,
             ),
           ],
           direction: Axis.horizontal,

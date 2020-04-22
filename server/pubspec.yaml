@@ -1,0 +1,4 @@
+name: focccus_note_server
+
+dependencies:
+  start: ^0.4.0

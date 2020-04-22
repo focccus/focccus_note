@@ -9,6 +9,7 @@ import 'package:focccus_note/presenter/shapes.dart';
 import 'package:focccus_note/presenter/viewer.dart';
 import 'package:focccus_note/presenter/widgets/modes_bar.dart';
 import 'package:focccus_note/presenter/widgets/top_bar.dart';
+import 'package:focccus_note/socket.dart';
 import 'package:focccus_note/storage/storage.dart';
 import 'package:focccus_note/presenter/widgets/background.dart';
 import 'package:focccus_note/widgets/change.dart';
@@ -149,6 +150,12 @@ class _PresenterPageState extends State<PresenterPage>
       updated = true;
     }
     if (updated) {
+      if (socket != null)
+        socket.send(
+          'updatecurrent',
+          currentShape.toJson(),
+        );
+
       setState(() {});
     }
   }
@@ -176,12 +183,21 @@ class _PresenterPageState extends State<PresenterPage>
 
       setState(() {
         if (!currentShape.isEmpty) {
+          if (socket != null)
+            socket.send(
+              'addshapes',
+              [currentShape.toJson()],
+            );
+
           changes.add(
             TwoClassChange<Keyframe, Shape>(
               currentFrame,
               currentShape,
               (f, v) => f.shapes.add(v),
-              (f, v) => f.shapes.remove(v),
+              (f, v) {
+                if (socket != null) socket.send('undo');
+                f.shapes.remove(v);
+              },
             ),
           );
         }
@@ -248,6 +264,10 @@ class _PresenterPageState extends State<PresenterPage>
   }
 
   void clearPage() {
+    if (socket != null) {
+      socket.send('clear');
+    }
+
     setState(() {
       changes.add(
         TwoClassChange(
@@ -267,6 +287,7 @@ class _PresenterPageState extends State<PresenterPage>
         if (!frames.contains(currentFrame)) frames.add(currentFrame);
         currentFrame = frames[i];
       });
+      sendEntireScreen();
     }
   }
 
@@ -321,6 +342,85 @@ class _PresenterPageState extends State<PresenterPage>
     }
   }
 
+  SocketConnection socket;
+  bool connectionDialogShown = false;
+
+  void showConnectionDialog() {
+    connectionDialogShown = true;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Waiting on Connection...'),
+        content: Center(child: CircularProgressIndicator()),
+      ),
+    ).then((value) => connectionDialogShown = false);
+  }
+
+  void sendEntireScreen() {
+    if (socket != null) {
+      socket.send('clear');
+      socket.send(
+        'addshapes',
+        getDisplayShapes(frames, currentFrame).map((e) => e.toJson()).toList(),
+      );
+    }
+  }
+
+  void project() async {
+    print('project');
+
+    if (socket != null) {
+      return setState(() {
+        socket.close();
+        socket = null;
+      });
+    }
+    showConnectionDialog();
+
+    socket ??= SocketConnection();
+
+    final connected = await socket.connect();
+
+    if (!connected) {
+      if (await showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: Text('Connection refused'),
+              content: Text('Want to reconnect?'),
+              actions: [
+                RaisedButton(
+                  child: Text('retry'),
+                  onPressed: () => Navigator.of(context).pop(true),
+                )
+              ],
+            ),
+          ) !=
+          null) project();
+      socket = null;
+      return;
+    }
+
+    setState(() {});
+
+    socket.on('client_joined').listen(
+      (event) {
+        if (event['count'] != null && event['count'] > 1) {
+          if (connectionDialogShown) Navigator.of(context).pop();
+        }
+      },
+    );
+
+    socket.on('client_left').listen(
+      (event) {
+        if (event['count'] == null || event['count'] < 2) {
+          showConnectionDialog();
+        }
+      },
+    );
+
+    sendEntireScreen();
+  }
+
   Future<bool> saveProject() async {
     addFrame();
     widget.prj.frames = frames;
@@ -334,6 +434,13 @@ class _PresenterPageState extends State<PresenterPage>
   void didChangeAppLifecycleState(state) {
     print("focus");
     //if (!focus.hasFocus) FocusScope.of(context).requestFocus(focus);
+  }
+
+  @override
+  void dispose() {
+    socket?.close();
+    focus.dispose();
+    super.dispose();
   }
 
   @override
@@ -409,6 +516,8 @@ class _PresenterPageState extends State<PresenterPage>
                   onAddFrame: addFrame,
                   onViewFrames: showFrames,
                   onPresent: present,
+                  onProject: project,
+                  projectingActive: socket != null,
                   onRedo: changes.canRedo ? redo : null,
                   onUndo: changes.canUndo ? undo : null,
                   onBack: () =>

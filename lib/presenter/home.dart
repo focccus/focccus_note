@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import 'package:focccus_note/presenter/presenter.dart';
+import 'package:focccus_note/presenter/projector.dart';
 import 'package:focccus_note/presenter/widgets/project_list_item.dart';
 import 'package:focccus_note/storage/storage.dart';
 import 'package:focccus_note/widgets/text_dialog.dart';
@@ -130,6 +131,14 @@ class _HomePageState extends State<HomePage> {
               child: Icon(Icons.content_paste),
               onTap: () => _pastePresentation(context),
               label: 'Paste',
+            ),
+            SpeedDialChild(
+              child: Icon(Icons.cast_connected),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (c) => ProjectorPage()),
+              ),
+              label: 'Connect',
             ),
             SpeedDialChild(
               child: Icon(Icons.system_update),
